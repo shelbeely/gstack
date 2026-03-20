@@ -48,27 +48,78 @@ Expect first useful run in under 5 minutes on any repo with tests already set up
 
 Open GitHub Copilot coding agent and paste this. Copilot does the rest.
 
-> Install gstack: run **`git clone https://github.com/garrytan/gstack.git ~/gstack && cd ~/gstack && ./setup --host copilot`** then add a "gstack" section to COPILOT.md that says to use the /browse skill from gstack for all web browsing, never use mcp\_\_claude-in-chrome\_\_\* tools, and lists the available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /review, /ship, /browse, /qa, /qa-only, /design-review, /setup-browser-cookies, /retro, /investigate, /document-release, /codex, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade. Then ask the user if they also want to add gstack to the current project so teammates get it.
+> Install gstack: run **`git clone https://github.com/shelbeely/gstack.git ~/gstack && cd ~/gstack && ./setup --host copilot`** then add the `## gstack` section shown below to COPILOT.md. Then ask the user if they also want to add gstack to the current project so teammates get it.
 
 ### Step 2: Add to your repo so teammates get it (optional)
 
-> Add gstack to this project: run **`mkdir -p .github/skills && rsync -a --delete --exclude .git ~/gstack/.github/skills/ .github/skills/ && cd ~/gstack && ./setup --host copilot`** then add a "gstack" section to this project's COPILOT.md that says to use the /browse skill from gstack for all web browsing, never use mcp\_\_claude-in-chrome\_\_\* tools, lists the available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /review, /ship, /browse, /qa, /qa-only, /design-review, /setup-browser-cookies, /retro, /investigate, /document-release, /codex, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade, and tells Copilot that if gstack skills aren't working, run `cd ~/gstack && ./setup --host copilot` to build the binary and refresh the generated skills.
+> Add gstack to this project: run **`mkdir -p .github/skills && rsync -a --delete --exclude .git ~/gstack/.github/skills/ .github/skills/ && cd ~/gstack && ./setup --host copilot`** then add the `## gstack` section shown below to this project's COPILOT.md.
 
 Real files get committed to your repo (not a submodule), so `git clone` just works. For Copilot they live inside `.github/skills/`. Nothing touches your PATH or runs in the background.
+
+### Using gstack in the GitHub Copilot Agent tab
+
+In the GitHub Copilot **Agent** tab, gstack skills are usually invoked by **intent**, not by typing literal slash commands.
+
+1. Open the Agent tab in a repo where gstack is installed.
+2. Ask for the workflow you want in plain English and, if helpful, mention the gstack skill by name.
+3. If your Copilot client exposes a `/skills` picker, you can use that to inspect or select available skills from `.github/skills/`.
+4. If gstack skills do not appear or are not being picked up, run `cd ~/gstack && ./setup --host copilot` again, make sure the repo has `.github/skills/`, and start a fresh Agent session.
+
+Examples for the Agent tab:
+
+- “Use the gstack `office-hours` skill to help me frame this product idea.”
+- “Use the gstack `review` skill on the current branch.”
+- “Use the gstack `qa` skill against `https://staging.example.com`.”
+- “Use the gstack `browse` skill to inspect this page.”
+
+Paste this into the relevant `COPILOT.md` (your personal one for a machine-wide install, or the repo's `COPILOT.md` for a team install):
+
+```md
+## gstack
+
+In the GitHub Copilot Agent tab, use gstack by asking Copilot to use the matching skill in plain English. The names below are the gstack skill names Copilot can match from `.github/skills/`.
+
+Use `/browse` from gstack for all web browsing and QA. Never use `mcp__claude-in-chrome__*` tools.
+
+Available skills:
+- `/office-hours`
+- `/plan-ceo-review`
+- `/plan-eng-review`
+- `/plan-design-review`
+- `/design-consultation`
+- `/review`
+- `/ship`
+- `/browse`
+- `/qa`
+- `/qa-only`
+- `/design-review`
+- `/setup-browser-cookies`
+- `/retro`
+- `/investigate`
+- `/document-release`
+- `/codex`
+- `/careful`
+- `/freeze`
+- `/guard`
+- `/unfreeze`
+- `/gstack-upgrade`
+
+If gstack skills are missing or stale, run `cd ~/gstack && ./setup --host copilot` to rebuild the binaries and refresh the generated skills.
+```
 
 ### Claude, Codex, Gemini CLI, or Cursor
 
 gstack also works on agents that support the [SKILL.md standard](https://github.com/anthropics/claude-code). Codex/Gemini/Cursor-style installs live in `.agents/skills/`; Copilot skills live in `.github/skills/`.
 
 ```bash
-git clone https://github.com/garrytan/gstack.git ~/.codex/skills/gstack
+git clone https://github.com/shelbeely/gstack.git ~/.codex/skills/gstack
 cd ~/.codex/skills/gstack && ./setup --host codex
 ```
 
 Or let setup auto-detect which agents you have installed:
 
 ```bash
-git clone https://github.com/garrytan/gstack.git ~/gstack
+git clone https://github.com/shelbeely/gstack.git ~/gstack
 cd ~/gstack && ./setup --host auto
 ```
 
@@ -200,7 +251,7 @@ Same tools, different outcome — because gstack gives you structured roles and 
 
 The models are getting better fast. The people who figure out how to work with them now — really work with them, not just dabble — are going to have a massive advantage. This is that window. Let's go.
 
-Fifteen specialists and six power tools. All slash commands. All Markdown. All free. **[github.com/garrytan/gstack](https://github.com/garrytan/gstack)** — MIT License
+Fifteen specialists and six power tools. All slash commands. All Markdown. All free. **[github.com/shelbeely/gstack](https://github.com/shelbeely/gstack)** — MIT License
 
 > **We're hiring.** Want to ship 10K+ LOC/day and help harden gstack?
 > Come work at YC — [ycombinator.com/software](https://ycombinator.com/software)
