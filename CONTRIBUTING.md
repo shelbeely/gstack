@@ -4,9 +4,9 @@ Thanks for wanting to make gstack better. Whether you're fixing a typo in a skil
 
 ## Quick start
 
-gstack skills are Markdown files that Claude Code discovers from a `skills/` directory. Normally they live at `~/.claude/skills/gstack/` (your global install). But when you're developing gstack itself, you want Claude Code to use the skills *in your working tree* — so edits take effect instantly without copying or deploying anything.
+gstack skills are Markdown files that GitHub Copilot coding agent discovers from `.github/skills/` (and Claude still discovers from `.claude/skills/`). Normally a Copilot install lives at `~/.copilot/skills/`, while the legacy Claude install lives at `~/.claude/skills/gstack/`. But when you're developing gstack itself, you want the agent to use the skills *in your working tree* — so edits take effect instantly without copying or deploying anything.
 
-That's what dev mode does. It symlinks your repo into the local `.claude/skills/` directory so Claude Code reads skills straight from your checkout.
+That's what dev mode does. It symlinks your repo into the local `.claude/skills/` and `.agents/skills/` directories so the agent reads skills straight from your checkout.
 
 ```bash
 git clone <repo> && cd gstack
@@ -14,7 +14,7 @@ bun install                    # install dependencies
 bin/dev-setup                  # activate dev mode
 ```
 
-Now edit any `SKILL.md`, invoke it in Claude Code (e.g. `/review`), and see your changes live. When you're done developing:
+Now edit any `SKILL.md`, invoke it in GitHub Copilot or Claude (e.g. `/review`), and see your changes live. When you're done developing:
 
 ```bash
 bin/dev-teardown               # deactivate — back to your global install
@@ -22,14 +22,14 @@ bin/dev-teardown               # deactivate — back to your global install
 
 ## Contributor mode
 
-Contributor mode turns gstack into a self-improving tool. Enable it and Claude Code
+Contributor mode turns gstack into a self-improving tool. Enable it and the agent
 will periodically reflect on its gstack experience — rating it 0-10 at the end of
 each major workflow step. When something isn't a 10, it thinks about why and files
 a report to `~/.gstack/contributor-logs/` with what happened, repro steps, and what
 would make it better.
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-config set gstack_contributor true
+~/.copilot/skills/gstack/bin/gstack-config set gstack_contributor true
 ```
 
 The logs are for **you**. When something bugs you enough to fix, the report is
@@ -62,8 +62,8 @@ When you have 3+ gstack sessions open simultaneously, every question tells you w
 
 When you're editing gstack skills and want to test them by actually using gstack
 in the same repo, `bin/dev-setup` wires this up. It creates `.claude/skills/`
-symlinks (gitignored) pointing back to your working tree, so Claude Code uses
-your local edits instead of the global install.
+and `.agents/skills/` symlinks (gitignored) pointing back to your working tree,
+so Copilot, Codex, Gemini, and Claude use your local edits instead of the global install.
 
 ```
 gstack/                          <- your working tree
@@ -91,7 +91,7 @@ bin/dev-setup
 # 2. Edit a skill
 vim review/SKILL.md
 
-# 3. Test it in Claude Code — changes are live
+# 3. Test it in GitHub Copilot or Claude — changes are live
 #    > /review
 
 # 4. Editing browse source? Rebuild the binary

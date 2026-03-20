@@ -22,6 +22,15 @@ const ALL_SKILLS = (() => {
   return skills;
 })();
 
+const COPILOT_SKILLS = ALL_SKILLS.map(skill =>
+  path.join(
+    '.github',
+    'skills',
+    skill.dir === '.' ? 'gstack' : skill.dir,
+    'SKILL.md',
+  ),
+);
+
 describe('gen-skill-docs', () => {
   test('generated SKILL.md contains all command categories', () => {
     const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
@@ -114,12 +123,34 @@ describe('gen-skill-docs', () => {
     expect(output).not.toContain('STALE');
   });
 
+  test('generated Copilot skill files are fresh (match --dry-run)', () => {
+    const result = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'copilot', '--dry-run'], {
+      cwd: ROOT,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(result.exitCode).toBe(0);
+    const output = result.stdout.toString();
+    for (const file of COPILOT_SKILLS) {
+      expect(output).toContain(`FRESH: ${file}`);
+    }
+    expect(output).not.toContain('STALE');
+  });
+
   test('no generated SKILL.md contains unresolved placeholders', () => {
     for (const skill of ALL_SKILLS) {
       const content = fs.readFileSync(path.join(ROOT, skill.dir, 'SKILL.md'), 'utf-8');
       const unresolved = content.match(/\{\{[A-Z_]+\}\}/g);
       expect(unresolved).toBeNull();
     }
+  });
+
+  test('generated Copilot root skill uses Copilot paths, not Claude paths', () => {
+    const content = fs.readFileSync(path.join(ROOT, '.github', 'skills', 'gstack', 'SKILL.md'), 'utf-8');
+    expect(content).toContain('~/.copilot/skills/gstack/bin');
+    expect(content).toContain('.github/skills/gstack');
+    expect(content).not.toContain('~/.claude/skills/gstack');
+    expect(content).not.toContain('.claude/skills/gstack');
   });
 
   test('templates contain placeholders', () => {
@@ -765,9 +796,9 @@ describe('Codex generation (--host codex)', () => {
 describe('setup script validation', () => {
   const setupContent = fs.readFileSync(path.join(ROOT, 'setup'), 'utf-8');
 
-  test('setup has separate link functions for Claude and Codex', () => {
+  test('setup has separate link functions for Claude and generated non-Claude skills', () => {
     expect(setupContent).toContain('link_claude_skill_dirs');
-    expect(setupContent).toContain('link_codex_skill_dirs');
+    expect(setupContent).toContain('link_generated_skill_dirs');
     // Old unified function must not exist
     expect(setupContent).not.toMatch(/^link_skill_dirs\(\)/m);
   });
@@ -779,26 +810,25 @@ describe('setup script validation', () => {
       setupContent.indexOf('# 5. Install for Codex')
     );
     expect(claudeSection).toContain('link_claude_skill_dirs');
-    expect(claudeSection).not.toContain('link_codex_skill_dirs');
+    expect(claudeSection).not.toContain('link_generated_skill_dirs');
   });
 
-  test('Codex install uses link_codex_skill_dirs', () => {
+  test('Codex install uses generated skill linker', () => {
     // The Codex install section (section 5) should use the Codex function
     const codexSection = setupContent.slice(
       setupContent.indexOf('# 5. Install for Codex'),
-      setupContent.indexOf('# 6. Create')
+      setupContent.indexOf('# 6. Install for GitHub Copilot')
     );
-    expect(codexSection).toContain('link_codex_skill_dirs');
+    expect(codexSection).toContain('link_generated_skill_dirs');
     expect(codexSection).not.toContain('link_claude_skill_dirs');
   });
 
-  test('link_codex_skill_dirs reads from .agents/skills/', () => {
-    // The Codex link function must reference .agents/skills for generated Codex skills
-    const fnStart = setupContent.indexOf('link_codex_skill_dirs()');
+  test('generated skill linker is used for .agents/skills and .github/skills outputs', () => {
+    const fnStart = setupContent.indexOf('link_generated_skill_dirs()');
     const fnEnd = setupContent.indexOf('}', setupContent.indexOf('linked[@]}', fnStart));
     const fnBody = setupContent.slice(fnStart, fnEnd);
-    expect(fnBody).toContain('.agents/skills');
-    expect(fnBody).toContain('gstack*');
+    expect(fnBody).toContain('generated_dir');
+    expect(fnBody).toContain('SKILL.md');
   });
 
   test('link_claude_skill_dirs creates relative symlinks', () => {
@@ -809,19 +839,20 @@ describe('setup script validation', () => {
     expect(fnBody).toContain('ln -snf "gstack/$skill_name"');
   });
 
-  test('setup supports --host auto|claude|codex', () => {
+  test('setup supports --host auto|claude|codex|copilot', () => {
     expect(setupContent).toContain('--host');
-    expect(setupContent).toContain('claude|codex|auto');
+    expect(setupContent).toContain('claude|codex|copilot|auto');
   });
 
-  test('auto mode detects claude and codex binaries', () => {
+  test('auto mode detects claude and codex binaries, plus Copilot home state', () => {
     expect(setupContent).toContain('command -v claude');
     expect(setupContent).toContain('command -v codex');
+    expect(setupContent).toContain('$HOME/.copilot');
   });
 
-  test('create_agents_sidecar links runtime assets', () => {
+  test('create_shared_sidecar links runtime assets', () => {
     // Sidecar must link bin, browse, review, qa
-    const fnStart = setupContent.indexOf('create_agents_sidecar()');
+    const fnStart = setupContent.indexOf('create_shared_sidecar()');
     const fnEnd = setupContent.indexOf('}', setupContent.indexOf('done', fnStart));
     const fnBody = setupContent.slice(fnStart, fnEnd);
     expect(fnBody).toContain('bin');
