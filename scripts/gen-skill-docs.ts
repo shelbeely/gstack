@@ -19,20 +19,22 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 // ─── Template Context ───────────────────────────────────────
 
-type Host = 'claude' | 'codex';
+type Host = 'claude' | 'codex' | 'copilot';
 
 const HOST_ARG = process.argv.find(a => a.startsWith('--host'));
 const HOST: Host = (() => {
   if (!HOST_ARG) return 'claude';
   const val = HOST_ARG.includes('=') ? HOST_ARG.split('=')[1] : process.argv[process.argv.indexOf(HOST_ARG) + 1];
   if (val === 'codex' || val === 'agents') return 'codex';
+  if (val === 'copilot' || val === 'github') return 'copilot';
   if (val === 'claude') return 'claude';
-  throw new Error(`Unknown host: ${val}. Use claude, codex, or agents.`);
+  throw new Error(`Unknown host: ${val}. Use claude, codex, copilot, github, or agents.`);
 })();
 
 interface HostPaths {
   skillRoot: string;
   localSkillRoot: string;
+  upgradeSkillPath: string;
   binDir: string;
   browseDir: string;
 }
@@ -41,14 +43,23 @@ const HOST_PATHS: Record<Host, HostPaths> = {
   claude: {
     skillRoot: '~/.claude/skills/gstack',
     localSkillRoot: '.claude/skills/gstack',
+    upgradeSkillPath: '~/.claude/skills/gstack/gstack-upgrade/SKILL.md',
     binDir: '~/.claude/skills/gstack/bin',
     browseDir: '~/.claude/skills/gstack/browse/dist',
   },
   codex: {
     skillRoot: '~/.codex/skills/gstack',
     localSkillRoot: '.agents/skills/gstack',
+    upgradeSkillPath: '~/.codex/skills/gstack-upgrade/SKILL.md',
     binDir: '~/.codex/skills/gstack/bin',
     browseDir: '~/.codex/skills/gstack/browse/dist',
+  },
+  copilot: {
+    skillRoot: '~/.copilot/skills/gstack',
+    localSkillRoot: '.github/skills/gstack',
+    upgradeSkillPath: '~/.copilot/skills/gstack-upgrade/SKILL.md',
+    binDir: '~/.copilot/skills/gstack/bin',
+    browseDir: '~/.copilot/skills/gstack/browse/dist',
   },
 };
 
@@ -154,7 +165,7 @@ echo "BRANCH: $_BRANCH"
 echo "PROACTIVE: $_PROACTIVE"
 _LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
 echo "LAKE_INTRO: $_LAKE_SEEN"
-_TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || true)
+_TEL=$(${ctx.paths.binDir}/gstack-config get telemetry 2>/dev/null || true)
 _TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
 _TEL_START=$(date +%s)
 _SESSION_ID="$$-$(date +%s)"
@@ -170,7 +181,7 @@ function generateUpgradeCheck(ctx: TemplateContext): string {
   return `If \`PROACTIVE\` is \`"false"\`, do not proactively suggest gstack skills — only invoke
 them when the user explicitly asks. The user opted out of proactive suggestions.
 
-If output shows \`UPGRADE_AVAILABLE <old> <new>\`: read \`${ctx.paths.skillRoot}/gstack-upgrade/SKILL.md\` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If \`JUST_UPGRADED <from> <to>\`: tell user "Running gstack v{to} (just updated!)" and continue.`;
+If output shows \`UPGRADE_AVAILABLE <old> <new>\`: read \`${ctx.paths.upgradeSkillPath}\` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If \`JUST_UPGRADED <from> <to>\`: tell user "Running gstack v{to} (just updated!)" and continue.`;
 }
 
 function generateLakeIntro(): string {
@@ -302,7 +313,7 @@ Hey gstack team — ran into this while using /{skill-name}:
 Slug: lowercase, hyphens, max 60 chars (e.g. \`browse-js-no-await\`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"`;
 }
 
-function generateCompletionStatus(): string {
+function generateCompletionStatus(ctx: TemplateContext): string {
   return `## Completion Status Protocol
 
 When completing a skill workflow, report status using one of:
@@ -346,7 +357,7 @@ Run this bash:
 _TEL_END=$(date +%s)
 _TEL_DUR=$(( _TEL_END - _TEL_START ))
 rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
-~/.claude/skills/gstack/bin/gstack-telemetry-log \\
+${ctx.paths.binDir}/gstack-telemetry-log \\
   --skill "SKILL_NAME" --duration "$_TEL_DUR" --outcome "OUTCOME" \\
   --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" 2>/dev/null &
 \`\`\`
@@ -366,7 +377,7 @@ function generatePreamble(ctx: TemplateContext): string {
     generateAskUserFormat(ctx),
     generateCompletenessSection(),
     generateContributorMode(),
-    generateCompletionStatus(),
+    generateCompletionStatus(ctx),
   ].join('\n\n');
 }
 
@@ -692,13 +703,13 @@ Minimum 0 per category.
 12. **Never refuse to use the browser.** When the user invokes /qa or /qa-only, they are requesting browser-based testing. Never suggest evals, unit tests, or other alternatives as a substitute. Even if the diff appears to have no UI changes, backend changes affect app behavior — always open the browser and test.`;
 }
 
-function generateDesignReviewLite(_ctx: TemplateContext): string {
+function generateDesignReviewLite(ctx: TemplateContext): string {
   return `## Design Review (conditional, diff-scoped)
 
 Check if the diff touches frontend files using \`gstack-diff-scope\`:
 
 \`\`\`bash
-source <(~/.claude/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
+source <(${ctx.paths.binDir}/gstack-diff-scope <base> 2>/dev/null)
 \`\`\`
 
 **If \`SCOPE_FRONTEND=false\`:** Skip design review silently. No output.
@@ -707,7 +718,7 @@ source <(~/.claude/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 
 1. **Check for DESIGN.md.** If \`DESIGN.md\` or \`design-system.md\` exists in the repo root, read it. All design findings are calibrated against it — patterns blessed in DESIGN.md are not flagged. If not found, use universal design principles.
 
-2. **Read \`.claude/skills/review/design-checklist.md\`.** If the file cannot be read, skip design review with a note: "Design checklist not found — skipping design review."
+2. **Read \`${ctx.paths.localSkillRoot}/review/design-checklist.md\`.** If the file cannot be read, skip design review with a note: "Design checklist not found — skipping design review."
 
 3. **Read each changed frontend file** (full file, not just diff hunks). Frontend files are identified by the patterns listed in the checklist.
 
@@ -721,7 +732,7 @@ source <(~/.claude/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 6. **Log the result** for the Review Readiness Dashboard:
 
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"design-review-lite","timestamp":"TIMESTAMP","status":"STATUS","findings":N,"auto_fixed":M,"commit":"COMMIT"}'
+${ctx.paths.binDir}/gstack-review-log '{"skill":"design-review-lite","timestamp":"TIMESTAMP","status":"STATUS","findings":N,"auto_fixed":M,"commit":"COMMIT"}'
 \`\`\`
 
 Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count, COMMIT = output of \`git rev-parse --short HEAD\`.`;
@@ -729,7 +740,7 @@ Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "is
 
 // NOTE: design-checklist.md is a subset of this methodology for code-level detection.
 // When adding items here, also update review/design-checklist.md, and vice versa.
-function generateDesignMethodology(_ctx: TemplateContext): string {
+function generateDesignMethodology(ctx: TemplateContext): string {
   return `## Modes
 
 ### Full (default)
@@ -979,7 +990,7 @@ Compare screenshots and observations across pages for:
 
 **Project-scoped:**
 \`\`\`bash
-source <(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null) && mkdir -p ~/.gstack/projects/$SLUG
+source <(${ctx.paths.binDir}/gstack-slug 2>/dev/null) && mkdir -p ~/.gstack/projects/$SLUG
 \`\`\`
 Write to: \`~/.gstack/projects/{slug}/{user}-{branch}-design-audit-{datetime}.md\`
 
@@ -1062,13 +1073,13 @@ Tie everything to user goals and product objectives. Always suggest specific imp
 11. **Show screenshots to the user.** After every \`$B screenshot\`, \`$B snapshot -a -o\`, or \`$B responsive\` command, use the Read tool on the output file(s) so the user can see them inline. For \`responsive\` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.`;
 }
 
-function generateReviewDashboard(_ctx: TemplateContext): string {
+function generateReviewDashboard(ctx: TemplateContext): string {
   return `## Review Readiness Dashboard
 
 After completing the review, read the review log and config to display the dashboard.
 
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-read
+${ctx.paths.binDir}/gstack-review-read
 \`\`\`
 
 Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, plan-design-review, design-review-lite, codex-review). Ignore entries with timestamps older than 7 days. For Design Review, show whichever is more recent between \`plan-design-review\` (full visual audit) and \`design-review-lite\` (code-level check). Append "(FULL)" or "(LITE)" to the status to distinguish. Display:
@@ -1425,7 +1436,7 @@ Check if the Codex CLI is available and read the user's Codex review preference:
 
 \`\`\`bash
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
-CODEX_REVIEWS_CFG=$(~/.claude/skills/gstack/bin/gstack-config get codex_reviews 2>/dev/null || true)
+    CODEX_REVIEWS_CFG=$(${ctx.paths.binDir}/gstack-config get codex_reviews 2>/dev/null || true)
 echo "CODEX_REVIEWS: \${CODEX_REVIEWS_CFG:-not_set}"
 \`\`\`
 
@@ -1447,14 +1458,14 @@ C) No thanks, don't ask me again
 
 If the user chooses A: persist the setting and run both:
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-config set codex_reviews enabled
+${ctx.paths.binDir}/gstack-config set codex_reviews enabled
 \`\`\`
 
 If the user chooses B: run both this time but do not persist any setting.
 
 If the user chooses C: persist the opt-out and skip:
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-config set codex_reviews disabled
+${ctx.paths.binDir}/gstack-config set codex_reviews disabled
 \`\`\`
 Then skip this step. Continue to the next step.
 
@@ -1512,7 +1523,7 @@ Before persisting the gate result, check for errors. All errors are non-blocking
 
 **Only if codex produced a real review (non-empty stdout):** Persist the code review result:
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","gate":"GATE","commit":"'"$(git rev-parse --short HEAD)"'"}'
+${ctx.paths.binDir}/gstack-review-log '{"skill":"codex-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","gate":"GATE","commit":"'"$(git rev-parse --short HEAD)"'"}'
 \`\`\`
 
 Substitute: STATUS ("clean" if PASS, "issues_found" if FAIL), GATE ("pass" or "fail").
@@ -1534,9 +1545,9 @@ ${!isShip ? `
 
 \`\`\`
 CROSS-MODEL ANALYSIS:
-  Both found: [findings that overlap between Claude and Codex]
+  Both found: [findings that overlap between your review and Codex]
   Only Codex found: [findings unique to Codex]
-  Only Claude found: [findings unique to Claude's review]
+  Only your review found: [findings unique to this agent's review]
   Agreement rate: X% (N/M total unique findings overlap)
 \`\`\`
 ` : ''}
@@ -1571,8 +1582,12 @@ function codexSkillName(skillDir: string): string {
   return `gstack-${skillDir}`;
 }
 
+function copilotSkillName(skillDir: string): string {
+  return skillDir === '.' || skillDir === '' ? 'gstack' : skillDir;
+}
+
 /**
- * Transform frontmatter for Codex: keep only name + description.
+ * Transform frontmatter for non-Claude hosts: keep only name + description.
  * Strips allowed-tools, hooks, version, and all other fields.
  * Handles multiline block scalar descriptions (YAML | syntax).
  */
@@ -1622,7 +1637,7 @@ function transformFrontmatter(content: string, host: Host): string {
     description = descLines.join('\n').trim();
   }
 
-  // Re-emit Codex frontmatter (name + description only)
+  // Re-emit host frontmatter (name + description only)
   const indentedDesc = description.split('\n').map(l => `  ${l}`).join('\n');
   const codexFm = `---\nname: ${name}\ndescription: |\n${indentedDesc}\n---`;
   return codexFm + body;
@@ -1671,10 +1686,15 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
   // Determine skill directory relative to ROOT
   const skillDir = path.relative(ROOT, path.dirname(tmplPath));
 
-  // For codex host, route output to .agents/skills/{codexSkillName}/SKILL.md
-  if (host === 'codex') {
-    const codexName = codexSkillName(skillDir === '.' ? '' : skillDir);
-    const outputDir = path.join(ROOT, '.agents', 'skills', codexName);
+  // For non-Claude hosts, route output to host-specific skill directories.
+  if (host !== 'claude') {
+    const generatedName = host === 'codex'
+      ? codexSkillName(skillDir === '.' ? '' : skillDir)
+      : copilotSkillName(skillDir === '.' ? '' : skillDir);
+    const baseDir = host === 'codex'
+      ? path.join(ROOT, '.agents', 'skills')
+      : path.join(ROOT, '.github', 'skills');
+    const outputDir = path.join(baseDir, generatedName);
     fs.mkdirSync(outputDir, { recursive: true });
     outputPath = path.join(outputDir, 'SKILL.md');
   }
@@ -1704,8 +1724,8 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
     throw new Error(`Unresolved placeholders in ${relTmplPath}: ${remaining.join(', ')}`);
   }
 
-  // For codex host: transform frontmatter and replace Claude-specific paths
-  if (host === 'codex') {
+  // For non-Claude hosts: transform frontmatter and replace Claude-specific paths
+  if (host !== 'claude') {
     // Extract hook safety prose BEFORE transforming frontmatter (which strips hooks)
     const safetyProse = extractHookSafetyProse(tmplContent);
 
@@ -1721,8 +1741,8 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
     // Replace remaining hardcoded Claude paths with host-appropriate paths
     content = content.replace(/~\/\.claude\/skills\/gstack/g, ctx.paths.skillRoot);
     content = content.replace(/\.claude\/skills\/gstack/g, ctx.paths.localSkillRoot);
-    content = content.replace(/\.claude\/skills\/review/g, '.agents/skills/gstack/review');
-    content = content.replace(/\.claude\/skills/g, '.agents/skills');
+    content = content.replace(/\.claude\/skills\/review/g, `${ctx.paths.localSkillRoot}/review`);
+    content = content.replace(/\.claude\/skills/g, path.posix.dirname(ctx.paths.localSkillRoot));
   }
 
   // Prepend generated header (after frontmatter)
